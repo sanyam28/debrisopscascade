@@ -2,7 +2,8 @@
 import { create } from 'zustand';
 import { assessDebrisField } from '../utils/risk';
 import { computeNudge } from '../utils/nudge';
-import { getAimDirection, isDirection, isAimBlocked, emitLaserShot } from '../utils/aim';
+import { getAimDirection, isDirection, isAimBlocked, isPositionBlocked, emitLaserShot } from '../utils/aim';
+import { positionAtTime } from '../utils/orbit';
 import { createFairRoller } from '../utils/fairRoll';
 import { generateLevel } from '../utils/levelGenerator';
 import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED, LASER_FIRES_WITHOUT_SAFE_ZONE } from '../utils/levels';
@@ -66,7 +67,7 @@ export const useGameStore = create((set, get) => ({
   spamLaser: false,           // 'Spam Laser Mode' toggle (bottom-right). ON = no laser cooldown
   bombsLeft: FIRST_CONFIG.bombs, // free bombs left this level (0 below level 7)
   bombPending: false,         // true while an extra bomb is being bought (blocks double clicks)
-  debrisCleared: 0,           // debris CLEARED this run (destroyed, or nudged away by the laser) -> paid out on victory
+  debrisCleared: 0,           // RED debris CLEARED this run (destroyed, or nudged away by the laser; non-red kills score nothing) -> paid out on victory
   clearedIds: [],             // which debris those were (each counts once)
   notices: [],                // on-screen popup messages (replaces alert())
   timeToCollision: ACTION_TIMEOUT_SECONDS, // Collision Window: seconds left to act (resets only when a weapon SUCCEEDS on a RED / high-risk debris: missile kill, laser nudge, bomb)
@@ -227,6 +228,13 @@ export const useGameStore = create((set, get) => ({
       pushNotice('NO MISSILES LEFT', 'warn');
       return;
     }
+    // Rule: the Earth blocks missiles too. Refuse before spending a missile / cooldown / Collision Window.
+    // (Tested directly against the camera, so it is right even if the target was only just selected.)
+    const missileTarget = debrisList.find((d) => d.id === selectedDebrisId);
+    if (missileTarget && isPositionBlocked(positionAtTime(missileTarget, get().simTime))) {
+      pushNotice('TARGET BEHIND EARTH - NO LINE OF SIGHT', 'warn');
+      return;
+    }
     if (missileCooldown > 0) {
       pushNotice(`MISSILE RELOADING - ${Math.ceil(missileCooldown)}s`, 'warn');
       return;
@@ -245,7 +253,7 @@ export const useGameStore = create((set, get) => ({
         debrisList: debrisList.filter((d) => d.id !== selectedDebrisId),
         missileLaunchesLeft: missileLaunchesLeft - 1,
         selectedDebrisId: null,
-        ...withCleared(get(), [selectedDebrisId]),
+        ...(wasRed ? withCleared(get(), [selectedDebrisId]) : {}), // points only for RED targets
       });
       pushNotice(`MISSILE HIT - ${selectedDebrisId} DESTROYED${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
     } else if (outcome === 'HIT_FAILED') {
@@ -311,7 +319,8 @@ export const useGameStore = create((set, get) => ({
             d.id === selectedDebrisId ? { ...d, ...nudge, nudges: (d.nudges || 0) + 1 } : d
           ),
           // A successful nudge clears that debris (once) - see NUDGE_COUNTS_AS_CLEARED in utils/levels.js
-          ...(NUDGE_COUNTS_AS_CLEARED ? withCleared(get(), [selectedDebrisId]) : {}),
+          // ...but only if it was a RED (high-risk) debris - non-red nudges earn no points
+          ...(NUDGE_COUNTS_AS_CLEARED && wasRed ? withCleared(get(), [selectedDebrisId]) : {}),
         });
         pushNotice(`ORBIT NUDGED - ${selectedDebrisId} PUSHED CLEAR${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
       } else {
@@ -363,7 +372,7 @@ export const useGameStore = create((set, get) => ({
     set({
       bombsLeft: s.bombsLeft - 1,
       debrisList: debrisList.filter((d) => !gone.has(d.id)),
-      ...withCleared(s, [...gone]),
+      ...withCleared(s, victims.filter((d) => d.isHighRisk).map((d) => d.id)), // only RED victims score
       selectedDebrisId: gone.has(selectedDebrisId) ? null : selectedDebrisId,
       ...(hitRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
     });

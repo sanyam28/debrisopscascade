@@ -10,7 +10,7 @@
 // the camera) cannot be shot. Must match Earth.jsx (diameter 5.6 => radius 2.8).
 export const EARTH_RADIUS = 2.8;
 
-const aim = { dir: null, blocked: false, screen: null };
+const aim = { dir: null, blocked: false, screen: null, camera: null };
 const shotListeners = new Set();
 
 /** true if the segment camera -> target passes through the Earth sphere (centre at origin). */
@@ -36,6 +36,16 @@ export function setAimDirection(v) {
 export function setAimFromCamera(cameraPos, targetPos) {
   aim.blocked = isOccludedByEarth(cameraPos, targetPos);
   setAimDirection({ x: targetPos.x - cameraPos.x, y: targetPos.y - cameraPos.y, z: targetPos.z - cameraPos.z });
+}
+
+/** Remembered every frame by <SimulationDriver/> so any debris can be line-of-sight tested on demand. */
+export function setCameraPosition(p) {
+  aim.camera = { x: p.x, y: p.y, z: p.z };
+}
+
+/** true if the Earth is between the camera and `targetPos` right now (false if the camera is unknown). */
+export function isPositionBlocked(targetPos) {
+  return !!aim.camera && isOccludedByEarth(aim.camera, targetPos);
 }
 
 /** true while the selected debris is hidden behind the Earth (no line of sight). */

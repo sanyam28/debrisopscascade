@@ -4,6 +4,7 @@ import React from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { MAX_LEVEL } from '../../utils/levels';
+import ResetGame from './ResetGame';
 
 // Title window shown on first load (and after "Exit Game" / "Main Menu"). The live game interface
 // stays visible behind it, darkened. Satellites and debris keep moving; the game clock is frozen.
@@ -86,6 +87,8 @@ export default function StartScreen() {
       >
         Start Mission
       </button>
+
+      <ResetGame />
 
       <div className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-2 text-[11px] font-mono uppercase tracking-wider text-slate-400">
         <span><span className="text-cyan-300">Click</span> select</span>

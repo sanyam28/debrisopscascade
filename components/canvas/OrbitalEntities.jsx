@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { orbitalPosition, positionAtTime } from '../../utils/orbit';
 import { ALL_SATELLITES, pushOutOfSatellites } from '../../utils/satellites';
-import { setAimFromCamera, setAimScreen } from '../../utils/aim';
+import { setAimFromCamera, setAimScreen, setCameraPosition } from '../../utils/aim';
 
 // --- Earth occlusion: debris hidden behind the planet must not be clickable -------
 // R3F only raycasts objects that have event handlers, and Earth has none, so a ray
@@ -206,7 +206,10 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
 // refreshes each debris' distance-based risk a few times per second).
 export function SimulationDriver() {
   const advanceSimulation = useGameStore((state) => state.advanceSimulation);
-  useFrame((_, delta) => advanceSimulation(Math.min(delta, 0.1))); // clamp tab-switch spikes
+  useFrame((state, delta) => {
+    setCameraPosition(state.camera.position); // lets the store test line of sight (missile / laser)
+    advanceSimulation(Math.min(delta, 0.1));   // clamp tab-switch spikes
+  });
   return null;
 }
 
