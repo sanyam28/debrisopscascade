@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { assessDebrisField } from '../utils/risk';
 import { computeNudge } from '../utils/nudge';
+import { getAimDirection, isDirection, isAimBlocked, emitLaserShot } from '../utils/aim';
 import { createFairRoller } from '../utils/fairRoll';
 import { generateLevel } from '../utils/levelGenerator';
 import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED } from '../utils/levels';
@@ -257,9 +258,15 @@ export const useGameStore = create((set, get) => ({
   },
 
   // Fire Action 2: Laser Nudge
-  fireLaser: () => {
+  // aimDir (optional): world-space direction of the laser ray. Omitted => last camera->debris aim.
+  fireLaser: (aimDir) => {
     const { gameState, selectedDebrisId, debrisList, levelConfig, spamLaser, laserCooldown, pushNotice, recalculateThreat } = get();
     if (gameState !== 'PLAYING' || !selectedDebrisId) return;
+    // Rule: the Earth blocks the laser. Refuse before spending cooldown / resetting the Collision Window.
+    if (isAimBlocked()) {
+      pushNotice('TARGET BEHIND EARTH - NO LINE OF SIGHT', 'warn');
+      return;
+    }
     // Spam Laser Mode OFF => 1 second reload between shots. ON => no limit.
     if (!spamLaser && laserCooldown > 0) {
       pushNotice('LASER RECHARGING', 'warn', 900);
@@ -269,14 +276,16 @@ export const useGameStore = create((set, get) => ({
       timeToCollision: ACTION_TIMEOUT_SECONDS, // acting resets the Collision Window
       laserCooldown: spamLaser ? 0 : LASER_COOLDOWN_SECONDS,
     });
+    emitLaserShot(); // HUD flashes the beam from the laser origin (components/ui/LaserOrigin.jsx)
 
     const outcome = rollShot(laserRoller, levelConfig.laserHitChance, levelConfig.laserNudgeChance);
 
     if (outcome === 'SUCCESS') {
       const target = debrisList.find((d) => d.id === selectedDebrisId);
-      // Pick the orbit change that pushes this debris farthest from the ISS
+      // Push the debris along the laser direction into the safest reachable orbit
       // (see utils/nudge.js). Returns { radius, initialAngle } or null.
-      const nudge = target ? computeNudge(target, get().simTime) : null;
+      const dir = isDirection(aimDir) ? aimDir : getAimDirection();
+      const nudge = target ? computeNudge(target, get().simTime, dir) : null;
       if (nudge) {
         set({
           debrisList: debrisList.map((d) =>
@@ -287,7 +296,7 @@ export const useGameStore = create((set, get) => ({
         });
         pushNotice(`ORBIT NUDGED - ${selectedDebrisId} PUSHED CLEAR`, 'success');
       } else {
-        pushNotice('NO SAFER ORBIT AVAILABLE FOR THIS TARGET', 'info');
+        pushNotice(dir ? 'NO SAFER ZONE IN LASER DIRECTION' : 'NO SAFER ORBIT AVAILABLE FOR THIS TARGET', 'info');
       }
     } else if (outcome === 'HIT_FAILED') {
       pushNotice('LASER HIT - ORBIT NUDGE FAILED', 'warn');

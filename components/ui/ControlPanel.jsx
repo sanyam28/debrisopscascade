@@ -91,7 +91,7 @@ export default function ControlPanel() {
 
         {/* Tactical Laser */}
         <button
-          onClick={fireLaser}
+          onClick={() => fireLaser()}
           disabled={!selectedDebrisId || laserCooling}
           className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:hover:bg-cyan-600 text-white rounded-lg font-bold text-sm tracking-wide shadow-lg transition"
         >

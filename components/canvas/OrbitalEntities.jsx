@@ -7,6 +7,7 @@ import * as THREE from 'three';
 // Add/Replace Debris Components in OrbitalEntities.jsx
 import { useGameStore } from '../../store/useGameStore';
 import { orbitalPosition } from '../../utils/orbit';
+import { setAimFromCamera, setAimScreen } from '../../utils/aim';
 
 // --- Earth occlusion: debris hidden behind the planet must not be clickable -------
 // R3F only raycasts objects that have event handlers, and Earth has none, so a ray
@@ -15,6 +16,8 @@ import { orbitalPosition } from '../../utils/orbit';
 const EARTH_RADIUS = 2.8;
 const EARTH_SPHERE = new THREE.Sphere(new THREE.Vector3(0, 0, 0), EARTH_RADIUS);
 const _earthHit = new THREE.Vector3();
+const _proj = new THREE.Vector3();
+const MIN_GLIDE_DIST = EARTH_RADIUS + 0.5; // debris never renders closer to Earth's centre than this
 
 /** true if the Earth is between the camera and the point the pointer ray hit. */
 function isBehindEarth(e) {
@@ -120,6 +123,22 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
     } else {
       // Glide to the target instead of teleporting, so a laser nudge is visible
       groupRef.current.position.lerp(pos, 1 - Math.exp(-6 * delta));
+      // Rule: never pass close to the Earth while gliding (a straight lerp can cut through it)
+      const d = groupRef.current.position.length();
+      if (d < MIN_GLIDE_DIST) groupRef.current.position.multiplyScalar(MIN_GLIDE_DIST / Math.max(d, 1e-6));
+    }
+    // Keep the laser aim (camera -> this debris) fresh for button / keyboard fire.
+    if (isSelected) {
+      setAimFromCamera(state.camera.position, groupRef.current.position);
+      // Where the target is on screen (for the laser beam drawn by the HUD)
+      _proj.copy(groupRef.current.position).project(state.camera);
+      setAimScreen(
+        (_proj.x * 0.5 + 0.5) * state.size.width,
+        (-_proj.y * 0.5 + 0.5) * state.size.height,
+        state.size.width,
+        state.size.height,
+        _proj.z < 1
+      );
     }
     if (spinRef.current) {
       spinRef.current.rotation.x += delta * 0.5;
@@ -160,7 +179,9 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
           const now = performance.now();
           if (now - lastTapRef.current < DOUBLE_TAP_MS) {
             lastTapRef.current = 0;
-            useGameStore.getState().fireLaser();
+            // e.ray.direction = the actual raycast direction of this click (world space)
+            const d = e.ray.direction;
+            useGameStore.getState().fireLaser({ x: d.x, y: d.y, z: d.z });
           } else {
             lastTapRef.current = now;
           }

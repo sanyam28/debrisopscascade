@@ -15,6 +15,7 @@ import PauseMenu from '../ui/PauseMenu';
 import StartScreen from '../ui/StartScreen';
 import KeyboardControls from '../ui/KeyboardControls';
 import SpamLaserToggle from '../ui/SpamLaserToggle';
+import LaserOrigin from '../ui/LaserOrigin';
 import CameraKeyControls from './CameraKeyControls';
 import { useGameStore } from '../../store/useGameStore';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -84,6 +85,7 @@ export function OrbitalScene() {
       <Sidebar />
       <TopThreats />
       <ControlPanel />
+      <LaserOrigin />
       <NoticeToasts />
       <PauseMenu />
       <StartScreen />

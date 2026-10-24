@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
-  allowedDevOrigins: ['10.61.61.26'],
-  cacheComponents: true,
-  partialPrefetching: true,
+  output: 'export',
+  allowedDevOrigins: ['10.61.40.231'],
+  // cacheComponents: true,
+  // partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {
