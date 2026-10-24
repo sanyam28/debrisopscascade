@@ -6,7 +6,7 @@ export const MAX_LEVEL = 15;
 // Bomb power-up (from level 7): clears the BOMB_TARGETS debris closest to a satellite in one go.
 export const BOMB_UNLOCK_LEVEL = 7;
 export const BOMB_FREE_PER_LEVEL = 1;
-export const BOMB_COST = 200;      // points for every extra bomb you buy (was 1000)
+export const BOMB_COST = 500;      // points for every extra bomb you buy (was 1000)
 export const BOMB_TARGETS = 3;
 
 // Slows EVERY orbiting body by running the shared sim clock slower (moved here from the store).

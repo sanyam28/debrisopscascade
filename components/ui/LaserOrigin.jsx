@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { getAimScreen, isAimBlocked, onLaserShot } from '../../utils/aim';
+import { getAimScreen, isAimBlocked, onLaserShot, setLaserOrigin } from '../../utils/aim';
 
 // Highlights WHERE THE LASER STARTS: the camera (your viewpoint). The ray is cast from the
 // camera towards the debris, so this marker stands in for the camera on screen:
@@ -52,6 +52,14 @@ export default function LaserOrigin() {
     let raf;
     const loop = () => {
       const b = isAimBlocked();
+      // Publish where the origin marker is on screen, so missiles can launch from the same spot as the laser.
+      const root = rootRef.current;
+      const marker = markerRef.current;
+      if (root && marker) {
+        const rr = root.getBoundingClientRect();
+        const mr = marker.getBoundingClientRect();
+        setLaserOrigin(mr.left - rr.left + mr.width / 2, mr.top - rr.top + mr.height / 2, rr.width, rr.height);
+      }
       setBlocked((prev) => (prev === b ? prev : b));
       raf = requestAnimationFrame(loop);
     };

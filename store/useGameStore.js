@@ -4,6 +4,7 @@ import { assessDebrisField } from '../utils/risk';
 import { computeNudge } from '../utils/nudge';
 import { getAimDirection, isDirection, isAimBlocked, isPositionBlocked, emitLaserShot } from '../utils/aim';
 import { positionAtTime } from '../utils/orbit';
+import { emitMissileShot, MISSILE_FLIGHT_SECONDS } from '../utils/missileFx';
 import { createFairRoller } from '../utils/fairRoll';
 import { generateLevel } from '../utils/levelGenerator';
 import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED, LASER_FIRES_WITHOUT_SAFE_ZONE } from '../utils/levels';
@@ -244,28 +245,45 @@ export const useGameStore = create((set, get) => ({
     set({ missileCooldown: MISSILE_COOLDOWN_SECONDS });
 
     const outcome = rollShot(missileRoller, levelConfig.missileHitChance, levelConfig.missileDestroyChance);
+    const targetId = selectedDebrisId;
+    // Snapshot at launch: was the target RED when the player fired?
+    const wasRed = !!debrisList.find((d) => d.id === targetId)?.isHighRisk;
+    const runAtFire = get().runId;
 
-    if (outcome === 'SUCCESS') {
-      // Hit AND destroyed. The Collision Window resets only if the target was a RED (high-risk) debris.
-      const wasRed = !!debrisList.find((d) => d.id === selectedDebrisId)?.isHighRisk;
-      set({
-        ...(wasRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
-        debrisList: debrisList.filter((d) => d.id !== selectedDebrisId),
-        missileLaunchesLeft: missileLaunchesLeft - 1,
-        selectedDebrisId: null,
-        ...(wasRed ? withCleared(get(), [selectedDebrisId]) : {}), // points only for RED targets
-      });
-      pushNotice(`MISSILE HIT - ${selectedDebrisId} DESTROYED${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
-    } else if (outcome === 'HIT_FAILED') {
-      // Hit, but the debris survived: launch is spent, target stays selected.
-      set({ missileLaunchesLeft: missileLaunchesLeft - 1 });
-      pushNotice('MISSILE HIT - TARGET SURVIVED', 'warn');
-    } else {
-      set({ missileLaunchesLeft: missileLaunchesLeft - 1 });
-      pushNotice('MISSILE MISSED TARGET', 'miss');
-    }
+    // The missile is spent the moment it launches...
+    set({ missileLaunchesLeft: missileLaunchesLeft - 1 });
 
-    recalculateThreat();
+    // ...but the RESULT (debris destroyed, notice, timer reset, points) is applied when the missile
+    // ARRIVES, so the debris is still there while the missile flies (components/canvas/MissileEffects.jsx).
+    let applied = false;
+    const applyOutcome = () => {
+      if (applied) return;
+      applied = true;
+      const s = get();
+      if (s.runId !== runAtFire || (s.gameState !== 'PLAYING' && s.gameState !== 'PAUSED')) return; // level restarted / game ended mid-flight
+
+      if (outcome === 'SUCCESS') {
+        const stillThere = s.debrisList.some((d) => d.id === targetId);
+        if (!stillThere) return; // already removed mid-flight (e.g. by a bomb)
+        set({
+          ...(wasRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
+          debrisList: s.debrisList.filter((d) => d.id !== targetId),
+          selectedDebrisId: s.selectedDebrisId === targetId ? null : s.selectedDebrisId,
+          ...(wasRed ? withCleared(s, [targetId]) : {}), // points only for RED targets
+        });
+        s.pushNotice(`MISSILE HIT - ${targetId} DESTROYED${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
+      } else if (outcome === 'HIT_FAILED') {
+        s.pushNotice('MISSILE HIT - TARGET SURVIVED', 'warn'); // debris stays selected
+      } else {
+        s.pushNotice('MISSILE MISSED TARGET', 'miss');
+      }
+      get().recalculateThreat();
+    };
+
+    // Hand the shot to the 3D scene; it calls applyOutcome on arrival. A fallback timer applies it anyway
+    // (no scene listening, or a hidden tab that stopped rendering).
+    emitMissileShot({ debrisId: targetId, outcome, flight: MISSILE_FLIGHT_SECONDS, onImpact: applyOutcome });
+    setTimeout(applyOutcome, (MISSILE_FLIGHT_SECONDS + 1.2) * 1000);
   },
 
   // Fire Action 2: Laser Nudge

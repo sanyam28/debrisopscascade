@@ -10,7 +10,7 @@
 // the camera) cannot be shot. Must match Earth.jsx (diameter 5.6 => radius 2.8).
 export const EARTH_RADIUS = 2.8;
 
-const aim = { dir: null, blocked: false, screen: null, camera: null };
+const aim = { dir: null, blocked: false, screen: null, camera: null, origin: null };
 const shotListeners = new Set();
 
 /** true if the segment camera -> target passes through the Earth sphere (centre at origin). */
@@ -69,6 +69,15 @@ export function setAimScreen(x, y, w, h, visible) {
 
 export function getAimScreen() {
   return aim.screen;
+}
+
+/** Where the laser-origin marker is on screen ({x, y, w, h} in px, w/h = overlay size). Missiles launch from here too. */
+export function setLaserOrigin(x, y, w, h) {
+  aim.origin = { x, y, w, h };
+}
+
+export function getLaserOrigin() {
+  return aim.origin;
 }
 
 /** The HUD subscribes here to flash a beam whenever the laser really fires. fn(outcome): 'SUCCESS' | 'HIT_FAILED' | 'MISS'. */
