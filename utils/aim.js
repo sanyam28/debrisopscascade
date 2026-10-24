@@ -61,12 +61,12 @@ export function getAimScreen() {
   return aim.screen;
 }
 
-/** The HUD subscribes here to flash a beam whenever the laser really fires. */
+/** The HUD subscribes here to flash a beam whenever the laser really fires. fn(outcome): 'SUCCESS' | 'HIT_FAILED' | 'MISS'. */
 export function onLaserShot(fn) {
   shotListeners.add(fn);
   return () => shotListeners.delete(fn);
 }
 
-export function emitLaserShot() {
-  shotListeners.forEach((fn) => fn());
+export function emitLaserShot(outcome) {
+  shotListeners.forEach((fn) => fn(outcome));
 }

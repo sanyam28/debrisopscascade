@@ -8,10 +8,13 @@ import { getAimScreen, isAimBlocked, onLaserShot } from '../../utils/aim';
 // camera towards the debris, so this marker stands in for the camera on screen:
 //   cyan  = ready               amber = target hidden behind Earth (no line of sight)
 //   slate = recharging          (hidden entirely until a debris is selected)
-// Every real shot also flashes a beam from the marker to the target.
+// Every real shot also flashes a beam from the marker: into the target on a hit, and
+// passing beside it (and on past) on a miss, so a miss really looks like a miss.
 // Purely visual: pointer-events-none, so it never blocks clicks on the 3D scene.
 
 const BEAM_MS = 280;
+const MISS_OFFSET_PX = [55, 95]; // a missed beam passes this many screen pixels beside the target
+const MISS_EXTEND = 1.7;         // ...and keeps going this far past it (1 = would end at the target)
 
 const STATUS = {
   ready: {
@@ -59,21 +62,35 @@ export default function LaserOrigin() {
   // Flash a beam from the marker to the target every time the laser fires.
   useEffect(() => {
     let timer;
-    const off = onLaserShot(() => {
+    const off = onLaserShot((outcome) => {
       const root = rootRef.current;
       const marker = markerRef.current;
       const target = getAimScreen();
       if (!root || !marker || !target?.visible) return;
       const rr = root.getBoundingClientRect();
       const mr = marker.getBoundingClientRect();
+      const x1 = mr.left - rr.left + mr.width / 2;
+      const y1 = mr.top - rr.top + mr.height / 2;
       const id = performance.now();
-      setBeam({
-        x1: mr.left - rr.left + mr.width / 2,
-        y1: mr.top - rr.top + mr.height / 2,
-        x2: target.x,
-        y2: target.y,
-        id,
-      });
+
+      let x2 = target.x;
+      let y2 = target.y;
+      const missed = outcome === 'MISS';
+      if (missed) {
+        // Aim at a point beside the target (random side), then run the beam on past it,
+        // so it visibly sails by instead of hitting.
+        const dx = target.x - x1;
+        const dy = target.y - y1;
+        const dist = Math.hypot(dx, dy) || 1;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const o = (MISS_OFFSET_PX[0] + Math.random() * (MISS_OFFSET_PX[1] - MISS_OFFSET_PX[0])) * side;
+        const ax = target.x + (-dy / dist) * o;
+        const ay = target.y + (dx / dist) * o;
+        x2 = x1 + (ax - x1) * MISS_EXTEND;
+        y2 = y1 + (ay - y1) * MISS_EXTEND;
+      }
+
+      setBeam({ x1, y1, x2, y2, missed, id });
       clearTimeout(timer);
       timer = setTimeout(() => setBeam((cur) => (cur && cur.id === id ? null : cur)), BEAM_MS);
     });
@@ -100,7 +117,8 @@ export default function LaserOrigin() {
             x1={beam.x1} y1={beam.y1} x2={beam.x2} y2={beam.y2}
             className="animate-pulse stroke-white" strokeWidth="2.5" strokeLinecap="round"
           />
-          <circle cx={beam.x2} cy={beam.y2} r="10" className="animate-ping fill-cyan-300/60" />
+          {/* impact flash only when the beam actually hits the target */}
+          {!beam.missed && <circle cx={beam.x2} cy={beam.y2} r="10" className="animate-ping fill-cyan-300/60" />}
         </svg>
       )}
 

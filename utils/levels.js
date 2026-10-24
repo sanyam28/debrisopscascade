@@ -80,6 +80,10 @@ export const pointsPerDebris = (level) => POINTS_PER_DEBRIS_BASE + POINTS_PER_DE
 /** A debris counts as CLEARED when it is destroyed (missile / bomb) OR successfully nudged by the laser.
  *  Each debris counts ONCE per run, so nudging the same one repeatedly can't farm points. */
 export const NUDGE_COUNTS_AS_CLEARED = true;
+/** What if the laser is fired at a debris and no safer orbit exists in the laser's direction?
+ *  false = the shot is refused before firing: no beam, no cooldown spent, no Collision Window change. (current)
+ *  true  = the shot is still fired (beam hits, notice says "NO SAFER ZONE"), cooldown is used. */
+export const LASER_FIRES_WITHOUT_SAFE_ZONE = false;
 /** true  = every victory pays (debris cleared x points per debris), replays included.
  *  false = only the first clear of a level pays (stops replay-farming). */
 export const REPLAY_PAYS = true;

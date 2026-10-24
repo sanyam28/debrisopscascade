@@ -5,12 +5,12 @@ import { computeNudge } from '../utils/nudge';
 import { getAimDirection, isDirection, isAimBlocked, emitLaserShot } from '../utils/aim';
 import { createFairRoller } from '../utils/fairRoll';
 import { generateLevel } from '../utils/levelGenerator';
-import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED } from '../utils/levels';
+import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED, LASER_FIRES_WITHOUT_SAFE_ZONE } from '../utils/levels';
 import { useProfileStore } from './useProfileStore';
 
 // If the player fires nothing for this many seconds, debris collides => game over.
 // This is the "Collision Window" countdown shown in the control panel.
-export const ACTION_TIMEOUT_SECONDS = 30;
+export const ACTION_TIMEOUT_SECONDS = 60;
 
 // Reload time after EVERY missile shot (hit or miss). Same on every level.
 export const MISSILE_COOLDOWN_SECONDS = 5;
@@ -263,11 +263,25 @@ export const useGameStore = create((set, get) => ({
   // Fire Action 2: Laser Nudge
   // aimDir (optional): world-space direction of the laser ray. Omitted => last camera->debris aim.
   fireLaser: (aimDir) => {
-    const { gameState, selectedDebrisId, debrisList, levelConfig, spamLaser, laserCooldown, pushNotice, recalculateThreat } = get();
+    const { gameState, selectedDebrisId, debrisList, levelConfig, riskConfig, spamLaser, laserCooldown, pushNotice, recalculateThreat } = get();
     if (gameState !== 'PLAYING' || !selectedDebrisId) return;
     // Rule: the Earth blocks the laser. Refuse before spending cooldown / resetting the Collision Window.
     if (isAimBlocked()) {
       pushNotice('TARGET BEHIND EARTH - NO LINE OF SIGHT', 'warn');
+      return;
+    }
+    // Rule: don't fire at a debris that is already in a safe zone (farther from the ISS than the
+    // threat radius => 0% risk). Nothing to fix, so refuse before any cooldown / beam.
+    const target = debrisList.find((d) => d.id === selectedDebrisId);
+    if (target && target.distanceToTarget >= riskConfig.threatRadius) {
+      pushNotice('TARGET ALREADY IN SAFE ZONE - NO NEED TO FIRE', 'info');
+      return;
+    }
+    // The laser's direction (explicit ray from a click, else camera -> debris)
+    const dir = isDirection(aimDir) ? aimDir : getAimDirection();
+    // Optional: also refuse up-front when no safer orbit exists along that direction.
+    if (!LASER_FIRES_WITHOUT_SAFE_ZONE && target && !computeNudge(target, get().simTime, dir)) {
+      pushNotice(dir ? 'NO SAFER ZONE IN LASER DIRECTION - NOT FIRED' : 'NO SAFER ORBIT AVAILABLE FOR THIS TARGET', 'info');
       return;
     }
     // Spam Laser Mode OFF => 1 second reload between shots. ON => no limit.
@@ -278,15 +292,15 @@ export const useGameStore = create((set, get) => ({
     // Every shot starts the reload, but the Collision Window is NOT reset here:
     // only a successful nudge of a RED (high-risk) debris resets it (see below).
     set({ laserCooldown: spamLaser ? 0 : LASER_COOLDOWN_SECONDS });
-    emitLaserShot(); // HUD flashes the beam from the laser origin (components/ui/LaserOrigin.jsx)
 
     const outcome = rollShot(laserRoller, levelConfig.laserHitChance, levelConfig.laserNudgeChance);
+    // HUD draws the beam (components/ui/LaserOrigin.jsx): into the target on a hit
+    // (even if no safe zone was found), passing beside it on a miss.
+    emitLaserShot(outcome);
 
     if (outcome === 'SUCCESS') {
-      const target = debrisList.find((d) => d.id === selectedDebrisId);
       // Push the debris along the laser direction into the safest reachable orbit
       // (see utils/nudge.js). Returns { radius, initialAngle } or null.
-      const dir = isDirection(aimDir) ? aimDir : getAimDirection();
       const nudge = target ? computeNudge(target, get().simTime, dir) : null;
       if (nudge) {
         // The Collision Window resets only if the nudged debris was RED (high-risk) when shot.
