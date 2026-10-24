@@ -1,6 +1,6 @@
 // utils/aim.js
 // Tiny pure-JS holder for "which way is the laser pointing".
-// - Double-tap on a debris passes the exact raycast direction (e.ray.direction).
+// - Clicking an already-selected debris passes the exact raycast direction (e.ray.direction).
 // - Button / keyboard fire has no ray, so the selected debris keeps this up to date
 //   with the camera -> debris direction every frame, and fireLaser reads it.
 // Kept outside the zustand store on purpose: it changes every frame and nobody

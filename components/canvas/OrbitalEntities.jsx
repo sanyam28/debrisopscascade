@@ -25,9 +25,6 @@ function isBehindEarth(e) {
   return p !== null && e.ray.origin.distanceTo(p) < e.distance;
 }
 
-// Two clicks on the same debris within this many ms = "double tap" => fire the laser.
-const DOUBLE_TAP_MS = 350;
-
 // --- Targeting reticle: the "aiming" animation ---------------------------------
 // mode 'aiming' : player is hovering the debris. A big ring zooms in and spins fast.
 // mode 'locked' : player clicked. The ring snaps tight, turns green and pulses.
@@ -92,7 +89,6 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
   const spinRef = useRef();         // the visible debris, tumbling in place
   const placedRef = useRef(false);  // false until the first frame positions the group
   const [hovered, setHovered] = useState(false);
-  const lastTapRef = useRef(0);    // time of the previous click on this debris (double-tap detection)
 
   const selectedDebrisId = useGameStore((state) => state.selectedDebrisId);
   const selectDebris = useGameStore((state) => state.selectDebris);
@@ -173,17 +169,15 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
         onClick={(e) => {
           if (isBehindEarth(e)) return; // hidden by the planet: ignore the click
           e.stopPropagation();
-          selectDebris(id);
 
-          // Double tap (two quick clicks/taps on the same debris) => fire the laser.
-          const now = performance.now();
-          if (now - lastTapRef.current < DOUBLE_TAP_MS) {
-            lastTapRef.current = 0;
+          // 1st click on a debris = select it. A click on the debris that is ALREADY selected
+          // = fire the laser (read the store, not a stale render value).
+          if (useGameStore.getState().selectedDebrisId === id) {
             // e.ray.direction = the actual raycast direction of this click (world space)
             const d = e.ray.direction;
             useGameStore.getState().fireLaser({ x: d.x, y: d.y, z: d.z });
           } else {
-            lastTapRef.current = now;
+            selectDebris(id);
           }
         }}
         onPointerOver={(e) => {

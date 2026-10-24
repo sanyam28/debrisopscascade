@@ -89,7 +89,7 @@ export default function StartScreen() {
 
       <div className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-2 text-[11px] font-mono uppercase tracking-wider text-slate-400">
         <span><span className="text-cyan-300">Click</span> select</span>
-        <span><span className="text-cyan-300">Double-tap</span> laser</span>
+        <span><span className="text-cyan-300">Click again</span> laser</span>
         <span><span className="text-cyan-300">Space</span> missile</span>
         <span><span className="text-cyan-300">W A S D</span> camera</span>
         <span><span className="text-cyan-300">B</span> bomb (lvl 7+)</span>

@@ -99,7 +99,7 @@ export default function ControlPanel() {
           <span className="block text-[10px] font-normal opacity-80">
             {Math.round(cfg.laserHitChance * 100)}% Hit | {Math.round(cfg.laserNudgeChance * 100)}% Nudge
           </span>
-          <span className="block text-[10px] font-mono font-normal text-cyan-100/80">[Double-tap debris]</span>
+          <span className="block text-[10px] font-mono font-normal text-cyan-100/80">[Click selected debris]</span>
         </button>
 
         {/* Bomb (level 7+): fire it while you have one; once it is used, buy another for BOMB_COST pts */}

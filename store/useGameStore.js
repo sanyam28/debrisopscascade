@@ -69,7 +69,7 @@ export const useGameStore = create((set, get) => ({
   debrisCleared: 0,           // debris CLEARED this run (destroyed, or nudged away by the laser) -> paid out on victory
   clearedIds: [],             // which debris those were (each counts once)
   notices: [],                // on-screen popup messages (replaces alert())
-  timeToCollision: ACTION_TIMEOUT_SECONDS, // Collision Window: seconds left to act (resets on every weapon use)
+  timeToCollision: ACTION_TIMEOUT_SECONDS, // Collision Window: seconds left to act (resets only when a weapon SUCCEEDS on a RED / high-risk debris: missile kill, laser nudge, bomb)
   gameState: 'START',         // 'START' (title screen) | 'PLAYING' | 'PAUSED' | 'VICTORY' | 'GAME_OVER'
   gameOverReason: null,       // null | 'COLLISION' (player idle) | 'CASCADE' (risk hit 100%)
 
@@ -231,20 +231,23 @@ export const useGameStore = create((set, get) => ({
       pushNotice(`MISSILE RELOADING - ${Math.ceil(missileCooldown)}s`, 'warn');
       return;
     }
-    // Acting resets the Collision Window; every shot (hit or miss) starts the reload.
-    set({ timeToCollision: ACTION_TIMEOUT_SECONDS, missileCooldown: MISSILE_COOLDOWN_SECONDS });
+    // Every shot (hit or miss) starts the reload. The Collision Window only resets on a
+    // successful kill of a RED debris (below) - misses, survivors and non-red kills buy no time.
+    set({ missileCooldown: MISSILE_COOLDOWN_SECONDS });
 
     const outcome = rollShot(missileRoller, levelConfig.missileHitChance, levelConfig.missileDestroyChance);
 
     if (outcome === 'SUCCESS') {
-      // Hit AND destroyed
+      // Hit AND destroyed. The Collision Window resets only if the target was a RED (high-risk) debris.
+      const wasRed = !!debrisList.find((d) => d.id === selectedDebrisId)?.isHighRisk;
       set({
+        ...(wasRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
         debrisList: debrisList.filter((d) => d.id !== selectedDebrisId),
         missileLaunchesLeft: missileLaunchesLeft - 1,
         selectedDebrisId: null,
         ...withCleared(get(), [selectedDebrisId]),
       });
-      pushNotice(`MISSILE HIT - ${selectedDebrisId} DESTROYED`, 'success');
+      pushNotice(`MISSILE HIT - ${selectedDebrisId} DESTROYED${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
     } else if (outcome === 'HIT_FAILED') {
       // Hit, but the debris survived: launch is spent, target stays selected.
       set({ missileLaunchesLeft: missileLaunchesLeft - 1 });
@@ -272,10 +275,9 @@ export const useGameStore = create((set, get) => ({
       pushNotice('LASER RECHARGING', 'warn', 900);
       return;
     }
-    set({
-      timeToCollision: ACTION_TIMEOUT_SECONDS, // acting resets the Collision Window
-      laserCooldown: spamLaser ? 0 : LASER_COOLDOWN_SECONDS,
-    });
+    // Every shot starts the reload, but the Collision Window is NOT reset here:
+    // only a successful nudge of a RED (high-risk) debris resets it (see below).
+    set({ laserCooldown: spamLaser ? 0 : LASER_COOLDOWN_SECONDS });
     emitLaserShot(); // HUD flashes the beam from the laser origin (components/ui/LaserOrigin.jsx)
 
     const outcome = rollShot(laserRoller, levelConfig.laserHitChance, levelConfig.laserNudgeChance);
@@ -287,14 +289,17 @@ export const useGameStore = create((set, get) => ({
       const dir = isDirection(aimDir) ? aimDir : getAimDirection();
       const nudge = target ? computeNudge(target, get().simTime, dir) : null;
       if (nudge) {
+        // The Collision Window resets only if the nudged debris was RED (high-risk) when shot.
+        const wasRed = !!target?.isHighRisk;
         set({
+          ...(wasRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
           debrisList: debrisList.map((d) =>
             d.id === selectedDebrisId ? { ...d, ...nudge, nudges: (d.nudges || 0) + 1 } : d
           ),
           // A successful nudge clears that debris (once) - see NUDGE_COUNTS_AS_CLEARED in utils/levels.js
           ...(NUDGE_COUNTS_AS_CLEARED ? withCleared(get(), [selectedDebrisId]) : {}),
         });
-        pushNotice(`ORBIT NUDGED - ${selectedDebrisId} PUSHED CLEAR`, 'success');
+        pushNotice(`ORBIT NUDGED - ${selectedDebrisId} PUSHED CLEAR${wasRed ? '' : ' (NOT A RED TARGET - TIMER NOT RESET)'}`, 'success');
       } else {
         pushNotice(dir ? 'NO SAFER ZONE IN LASER DIRECTION' : 'NO SAFER ORBIT AVAILABLE FOR THIS TARGET', 'info');
       }
@@ -339,14 +344,16 @@ export const useGameStore = create((set, get) => ({
       .slice(0, BOMB_TARGETS);
     const gone = new Set(victims.map((d) => d.id));
 
+    // The Collision Window resets only if the bomb took out at least one RED (high-risk) debris.
+    const hitRed = victims.some((d) => d.isHighRisk);
     set({
       bombsLeft: s.bombsLeft - 1,
       debrisList: debrisList.filter((d) => !gone.has(d.id)),
       ...withCleared(s, [...gone]),
       selectedDebrisId: gone.has(selectedDebrisId) ? null : selectedDebrisId,
-      timeToCollision: ACTION_TIMEOUT_SECONDS, // acting resets the Collision Window
+      ...(hitRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
     });
-    pushNotice(`BOMB DETONATED - ${victims.length} DEBRIS ERADICATED`, 'success');
+    pushNotice(`BOMB DETONATED - ${victims.length} DEBRIS ERADICATED${hitRed ? '' : ' (NO RED TARGETS - TIMER NOT RESET)'}`, 'success');
     recalculateThreat();
   },
 
