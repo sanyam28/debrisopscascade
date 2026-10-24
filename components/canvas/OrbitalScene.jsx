@@ -20,7 +20,7 @@ import CameraKeyControls from './CameraKeyControls';
 import { useGameStore } from '../../store/useGameStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { MAX_LEVEL } from '../../utils/levels';
-import { ISS_ORBIT } from '../../utils/risk';
+import { ISS_ORBIT, SAT2_ORBIT, HUBBLE_ORBIT } from '../../utils/satellites';
 
 export function OrbitalScene() {
   const initLevel = useGameStore((s) => s.initLevel);
@@ -119,12 +119,12 @@ export function OrbitalScene() {
         <Suspense fallback={null}>
           <SatelliteModel 
             modelPath="/satellite2.glb" 
-            radius={6.8} 
-            speed={0.3} 
-            inclination={-Math.PI / 4} 
-            axisAngle={Math.PI / 3}
+            radius={SAT2_ORBIT.radius}
+            speed={SAT2_ORBIT.speed}
+            inclination={SAT2_ORBIT.inclination}
+            axisAngle={SAT2_ORBIT.axisAngle}
             scale={0.0001} 
-            initialAngle={Math.PI / 2}
+            initialAngle={SAT2_ORBIT.initialAngle}
             showOrbit={true}
             orbitColor="#ffffff"
           />
@@ -134,12 +134,12 @@ export function OrbitalScene() {
         <Suspense fallback={null}>
           <SatelliteModel 
             modelPath="/hubble.glb" 
-            radius={8.2} 
-            speed={0.2} 
-            inclination={Math.PI / 3} 
-            axisAngle={(2 * Math.PI) / 3}
+            radius={HUBBLE_ORBIT.radius}
+            speed={HUBBLE_ORBIT.speed}
+            inclination={HUBBLE_ORBIT.inclination}
+            axisAngle={HUBBLE_ORBIT.axisAngle}
             scale={0.1} 
-            initialAngle={Math.PI}
+            initialAngle={HUBBLE_ORBIT.initialAngle}
             showOrbit={true}
             orbitColor="#ffaa00"
           />

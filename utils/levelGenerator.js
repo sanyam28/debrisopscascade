@@ -9,6 +9,7 @@
 import { createPiReader } from './piSeeder';
 import { positionAtTime } from './orbit';
 import { CRITICAL_SATELLITES, assessDebrisField, distanceBetween } from './risk';
+import { ALL_SATELLITES, SAT_CLEARANCE, snapRadius } from './satellites';
 import {
   getLevelConfig,
   riskConfigFor,
@@ -21,7 +22,11 @@ import {
   START_THREAT_MAX,
 } from './levels';
 
-const ORBIT_BANDS = [5.0, 5.8, 6.8, 7.8, 8.5];
+// Orbit radii for debris. Each band sits OUTSIDE the keep-out shell (SAT_CLEARANCE) of every satellite
+// (ISS 5.5, Satellite 2 6.8, Hubble 8.2), so debris can never touch a satellite. Jitter is +/-0.1 and
+// buildAttempt() snaps the final radius out of any shell as a safety net.
+const ORBIT_BANDS = [4.6, 6.15, 7.5, 8.9, 9.8];
+const RADIUS_JITTER = 0.2;
 const LAYER_THICKNESS = 0.75; // |radius difference| below this = "same radius layer"
 const TWO_PI = Math.PI * 2;
 const MAX_SPAWN_TRIES = 30;
@@ -66,7 +71,7 @@ function buildAttempt(level, cfg, salt) {
   for (let i = 0; i < cfg.debrisCount; i++) {
     const d = {
       id: `DEBRIS-${5000 + level * 100 + i}`,
-      radius: ORBIT_BANDS[i % ORBIT_BANDS.length] + (pi.float(2) - 0.5) * 0.3,
+      radius: snapRadius(ORBIT_BANDS[i % ORBIT_BANDS.length] + (pi.float(2) - 0.5) * RADIUS_JITTER),
       speed: (0.15 + pi.float(2) * 0.2) * (i % 2 === 0 ? 1 : -1) * cfg.speedMult,
       inclination: ((i % 5) - 2) * (Math.PI / 8),
       axisAngle: (i / cfg.debrisCount) * TWO_PI + pi.float(2) * 0.2,
@@ -98,6 +103,9 @@ export function validateLevel(debris, cfg) {
   if (threatLevel <= START_THREAT_MIN) problems.push(`start threat ${threatLevel}% is too low`);
   if (threatLevel >= START_THREAT_MAX) problems.push(`start threat ${threatLevel}% is too high`);
   if (debris.some((d) => violatesPadding(d))) problems.push('proximity padding violated');
+  if (debris.some((d) => ALL_SATELLITES.some((s) => Math.abs(d.radius - s.radius) < SAT_CLEARANCE))) {
+    problems.push('debris orbit overlaps a satellite orbit');
+  }
   if (debris.some((d) => timeToImpact(d) < MIN_TTI_SECONDS)) problems.push('time-to-impact too short');
   return { ok: problems.length === 0, problems, startThreat: threatLevel };
 }

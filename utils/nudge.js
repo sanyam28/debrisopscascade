@@ -17,6 +17,7 @@
 // side of the ISS it is on (instead of always "outwards").
 
 import { positionAtTime, orbitalPosition } from './orbit';
+import { snapRadius } from './satellites';
 import { CRITICAL_SATELLITES, RISK_CONFIG, distanceBetween, riskFromDistance } from './risk';
 
 export const NUDGE_CONFIG = {
@@ -142,7 +143,10 @@ export function computeNudge(
   const from = positionAtTime(debris, simTime);
 
   let best = null;
-  for (const { radius, initialAngle } of candidates) {
+  for (const c of candidates) {
+    // Rule: a nudge may never leave the debris on (or near) a satellite's orbit - snap it out of every keep-out shell.
+    const radius = snapRadius(c.radius, cfg.minRadius, cfg.maxRadius);
+    const initialAngle = c.initialAngle;
     const candidate = { ...debris, radius, initialAngle };
 
     const to = positionAtTime(candidate, simTime);

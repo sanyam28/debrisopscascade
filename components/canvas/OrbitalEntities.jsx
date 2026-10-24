@@ -6,7 +6,8 @@ import { useGLTF, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 // Add/Replace Debris Components in OrbitalEntities.jsx
 import { useGameStore } from '../../store/useGameStore';
-import { orbitalPosition } from '../../utils/orbit';
+import { orbitalPosition, positionAtTime } from '../../utils/orbit';
+import { ALL_SATELLITES, pushOutOfSatellites } from '../../utils/satellites';
 import { setAimFromCamera, setAimScreen } from '../../utils/aim';
 
 // --- Earth occlusion: debris hidden behind the planet must not be clickable -------
@@ -123,6 +124,9 @@ function InteractiveDebrisPiece({ id, radius, speed, inclination, axisAngle, ini
       const d = groupRef.current.position.length();
       if (d < MIN_GLIDE_DIST) groupRef.current.position.multiplyScalar(MIN_GLIDE_DIST / Math.max(d, 1e-6));
     }
+    // Rule: never overlap a satellite - not even while gliding to a new orbit after a nudge.
+    // (Orbits are already kept apart by radius; this covers the in-between frames.)
+    pushOutOfSatellites(groupRef.current.position, ALL_SATELLITES.map((s) => positionAtTime(s, t)));
     // Keep the laser aim (camera -> this debris) fresh for button / keyboard fire.
     if (isSelected) {
       setAimFromCamera(state.camera.position, groupRef.current.position);

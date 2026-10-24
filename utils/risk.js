@@ -16,16 +16,9 @@
 
 import { positionAtTime } from './orbit';
 
-// Must match the ISS in OrbitalScene.jsx (which imports this object).
-export const ISS_ORBIT = {
-  id: 'iss',
-  name: 'ISS Space Station',
-  radius: 5.5,
-  speed: 0.4,
-  inclination: Math.PI / 6,
-  axisAngle: 0,
-  initialAngle: 0,
-};
+// The satellite orbits live in utils/satellites.js (shared with the scene and the level generator).
+import { ISS_ORBIT } from './satellites';
+export { ISS_ORBIT };
 
 // Each debris is scored against its NEAREST satellite in this list.
 // Add the weather sat / GPS here later.

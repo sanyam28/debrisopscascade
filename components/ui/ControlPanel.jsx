@@ -37,7 +37,7 @@ export default function ControlPanel() {
         </p>
         {/* Live score for this run: paid out when the level is cleared */}
         <p className="text-[10px] font-mono text-amber-300/80 mt-1">
-          Cleared {debrisCleared} x {pointsPerDebris(level)} = {debrisCleared * pointsPerDebris(level)} pts
+          {debrisCleared * pointsPerDebris(level)} pts
         </p>
       </div>
 
