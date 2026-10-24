@@ -15,6 +15,7 @@ import PauseMenu from '../ui/PauseMenu';
 import StartScreen from '../ui/StartScreen';
 import KeyboardControls from '../ui/KeyboardControls';
 import SpamLaserToggle from '../ui/SpamLaserToggle';
+import CameraSensitivity from '../ui/CameraSensitivity';
 import LaserOrigin from '../ui/LaserOrigin';
 import CameraKeyControls from './CameraKeyControls';
 import { useGameStore } from '../../store/useGameStore';
@@ -91,6 +92,7 @@ export function OrbitalScene() {
       <StartScreen />
       <KeyboardControls />
       <SpamLaserToggle />
+      <CameraSensitivity />
       <EndScreen />
 
       {/* 5. 3D WebGL Canvas */}
