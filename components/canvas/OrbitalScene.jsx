@@ -16,6 +16,8 @@ import StartScreen from '../ui/StartScreen';
 import KeyboardControls from '../ui/KeyboardControls';
 import SpamLaserToggle from '../ui/SpamLaserToggle';
 import CameraSensitivity from '../ui/CameraSensitivity';
+import SoundControl from '../ui/SoundControl';
+import SoundManager from '../SoundManager';
 import LaserOrigin from '../ui/LaserOrigin';
 import CameraKeyControls from './CameraKeyControls';
 import MissileEffects from './MissileEffects';
@@ -95,6 +97,8 @@ export function OrbitalScene() {
       <KeyboardControls />
       <SpamLaserToggle />
       <CameraSensitivity />
+      <SoundControl />
+      <SoundManager />
       <EndScreen />
 
       {/* 5. 3D WebGL Canvas */}
