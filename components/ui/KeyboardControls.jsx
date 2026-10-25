@@ -35,7 +35,11 @@ export default function KeyboardControls() {
       }
 
       if (e.code === 'KeyB') {
-        if (s.gameState === 'PLAYING' && !e.repeat) s.fireBomb(); // does nothing below level 7
+        if (s.gameState === 'PLAYING' && !e.repeat) {
+          // Like Space: bomb the debris under the pointer (or the selected one)
+          if (s.hoveredDebrisId && s.hoveredDebrisId !== s.selectedDebrisId) s.selectDebris(s.hoveredDebrisId);
+          s.fireBomb(); // does nothing below level 7
+        }
         return;
       }
 

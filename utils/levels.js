@@ -3,11 +3,13 @@
 
 export const MAX_LEVEL = 15;
 
-// Bomb power-up (from level 7): clears the BOMB_TARGETS debris closest to a satellite in one go.
+// Bomb power-up (from level 7): thrown at the SELECTED RED debris. It also destroys up to (BOMB_TARGETS - 1) more
+// RED debris that are within BOMB_BLAST_RADIUS of it (scene units), so 1-3 debris per bomb.
 export const BOMB_UNLOCK_LEVEL = 7;
 export const BOMB_FREE_PER_LEVEL = 1;
-export const BOMB_COST = 500;      // points for every extra bomb you buy (was 1000)
-export const BOMB_TARGETS = 3;
+export const BOMB_COST = 200;      // points for every extra bomb you buy (was 1000)
+export const BOMB_TARGETS = 3;        // max debris one bomb destroys (the selected one + at most 2 more)
+export const BOMB_BLAST_RADIUS = 3;   // other red debris must be this close to the selected one to be caught
 
 // Slows EVERY orbiting body by running the shared sim clock slower (moved here from the store).
 export const SIM_SPEED = 0.15;

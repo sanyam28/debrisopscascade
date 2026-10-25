@@ -19,6 +19,7 @@ import CameraSensitivity from '../ui/CameraSensitivity';
 import LaserOrigin from '../ui/LaserOrigin';
 import CameraKeyControls from './CameraKeyControls';
 import MissileEffects from './MissileEffects';
+import BombEffects from './BombEffects';
 import { useGameStore } from '../../store/useGameStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { MAX_LEVEL } from '../../utils/levels';
@@ -151,6 +152,7 @@ export function OrbitalScene() {
         {/* Dynamic, Clickable Debris Field */}
         <DynamicDebrisField />
         <MissileEffects />
+        <BombEffects />
 
         <OrbitControls 
           enableRotate={true} 

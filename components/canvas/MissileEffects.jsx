@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { positionAtTime } from '../../utils/orbit';
 import { onMissileShot } from '../../utils/missileFx';
-import { getLaserOrigin } from '../../utils/aim';
+import { getLaunchOrigin } from './launchOrigin';
 
 // Draws every missile shot (must sit INSIDE <Canvas>):
 //   1. a small missile flies from the LASER ORIGIN marker (same spot the laser starts from) to the target,
@@ -21,7 +21,6 @@ const MODEL_URL = '/missile.glb';
 const MISSILE_LENGTH = 0.42;     // longest side of the missile in scene units (debris are ~0.2 wide) - make smaller / bigger here
 const MODEL_NOSE_IS_NEGATIVE = false; // set true if your model flies tail-first (nose points the other way along its long axis)
 const EARTH_RADIUS = 2.8;
-const LAUNCH_DISTANCE = 4.5;     // the launch point is this far in front of the camera, straight behind the laser-origin marker
 const EXPLOSION_SECONDS = 0.65;
 const EXPLOSION_SIZE = 0.55;     // max fireball radius
 const SPARKS = 10;
@@ -108,11 +107,7 @@ function Shot({ shot, onFinished }) {
 
     // Launch point: the same place the laser starts from - the origin marker on screen (bottom centre).
     // Turn that pixel into a ray from the camera and start the missile a little way along it.
-    const o = getLaserOrigin();
-    const ndcX = o ? (o.x / o.w) * 2 - 1 : 0;
-    const ndcY = o ? -(o.y / o.h) * 2 + 1 : -0.55; // fallback: bottom centre
-    const origin = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera).sub(camera.position).normalize()
-      .multiplyScalar(LAUNCH_DISTANCE).add(camera.position);
+    const origin = getLaunchOrigin(camera);
 
     const miss = shot.outcome === 'MISS';
     const side = new THREE.Vector3().crossVectors(tv.clone().sub(origin), camera.position).normalize();

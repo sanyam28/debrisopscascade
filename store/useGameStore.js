@@ -1,13 +1,13 @@
 // store/useGameStore.js
 import { create } from 'zustand';
-import { assessDebrisField } from '../utils/risk';
+import { assessDebrisField, distanceBetween } from '../utils/risk';
 import { computeNudge } from '../utils/nudge';
 import { getAimDirection, isDirection, isAimBlocked, isPositionBlocked, emitLaserShot } from '../utils/aim';
 import { positionAtTime } from '../utils/orbit';
-import { emitMissileShot, MISSILE_FLIGHT_SECONDS } from '../utils/missileFx';
+import { emitMissileShot, MISSILE_FLIGHT_SECONDS, emitBombShot, BOMB_TOTAL_SECONDS } from '../utils/missileFx';
 import { createFairRoller } from '../utils/fairRoll';
 import { generateLevel } from '../utils/levelGenerator';
-import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, NUDGE_COUNTS_AS_CLEARED, LASER_FIRES_WITHOUT_SAFE_ZONE } from '../utils/levels';
+import { getLevelConfig, riskConfigFor, clampLevel, SIM_SPEED, MAX_LEVEL, BOMB_UNLOCK_LEVEL, BOMB_COST, BOMB_TARGETS, BOMB_BLAST_RADIUS, NUDGE_COUNTS_AS_CLEARED, LASER_FIRES_WITHOUT_SAFE_ZONE } from '../utils/levels';
 import { useProfileStore } from './useProfileStore';
 
 // If the player fires nothing for this many seconds, debris collides => game over.
@@ -50,6 +50,9 @@ function withCleared(state, ids) {
 
 // Id counter for on-screen notices (see pushNotice below)
 let noticeCounter = 0;
+
+// runId of the level a bomb is currently flying in (null = none). Stops a second bomb while one is in the air.
+let bombInFlightRun = null;
 
 const FIRST_CONFIG = getLevelConfig(1);
 
@@ -369,8 +372,9 @@ export const useGameStore = create((set, get) => ({
     get().pushNotice(`BOMB BOUGHT (-${BOMB_COST} PTS)`, 'info');
   },
 
-  // Fire Action 3 (level 7+): Bomb. Destroys the BOMB_TARGETS debris closest to a satellite,
-  // no aiming and no roll. Each level starts with 1 free bomb; after that you must buy more.
+  // Fire Action 3 (level 7+): Bomb. Thrown at the SELECTED RED debris; it also takes out up to 2 more RED
+  // debris within BOMB_BLAST_RADIUS of it. No roll - it always works. Each level starts with 1 free bomb.
+  // The result is applied piece by piece as the bomb's fragments reach their targets (BombEffects.jsx).
   fireBomb: () => {
     const s = get();
     if (s.gameState !== 'PLAYING' || s.level < BOMB_UNLOCK_LEVEL) return;
@@ -378,24 +382,68 @@ export const useGameStore = create((set, get) => ({
       s.pushNotice(`NO BOMBS LEFT - BUY ONE FOR ${BOMB_COST} PTS`, 'warn');
       return;
     }
+    if (bombInFlightRun === s.runId) return; // one bomb at a time
 
-    const { debrisList, selectedDebrisId, pushNotice, recalculateThreat } = s;
-    const victims = [...debrisList]
-      .sort((a, b) => a.distanceToTarget - b.distanceToTarget) // closest to the satellite first
-      .slice(0, BOMB_TARGETS);
-    const gone = new Set(victims.map((d) => d.id));
+    const { debrisList, selectedDebrisId, pushNotice } = s;
+    const target = debrisList.find((d) => d.id === selectedDebrisId);
+    if (!target) {
+      pushNotice('SELECT A RED DEBRIS TO BOMB FIRST', 'info');
+      return;
+    }
+    if (!target.isHighRisk) {
+      pushNotice('BOMB NEEDS A RED TARGET - SELECT A RED DEBRIS', 'warn');
+      return;
+    }
+    const targetPos = positionAtTime(target, s.simTime);
+    if (isPositionBlocked(targetPos)) {
+      pushNotice('TARGET BEHIND EARTH - NO LINE OF SIGHT', 'warn');
+      return;
+    }
 
-    // The Collision Window resets only if the bomb took out at least one RED (high-risk) debris.
-    const hitRed = victims.some((d) => d.isHighRisk);
-    set({
-      bombsLeft: s.bombsLeft - 1,
-      debrisList: debrisList.filter((d) => !gone.has(d.id)),
-      ...withCleared(s, victims.filter((d) => d.isHighRisk).map((d) => d.id)), // only RED victims score
-      selectedDebrisId: gone.has(selectedDebrisId) ? null : selectedDebrisId,
-      ...(hitRed ? { timeToCollision: ACTION_TIMEOUT_SECONDS } : {}),
-    });
-    pushNotice(`BOMB DETONATED - ${victims.length} DEBRIS ERADICATED${hitRed ? '' : ' (NO RED TARGETS - TIMER NOT RESET)'}`, 'success');
-    recalculateThreat();
+    // The target + at most (BOMB_TARGETS - 1) other RED debris inside the blast radius, nearest first.
+    const caught = debrisList
+      .filter((d) => d.id !== target.id && d.isHighRisk)
+      .map((d) => ({ id: d.id, dist: distanceBetween(positionAtTime(d, s.simTime), targetPos) }))
+      .filter((d) => d.dist <= BOMB_BLAST_RADIUS)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, BOMB_TARGETS - 1);
+    const victimIds = [target.id, ...caught.map((c) => c.id)]; // 1 to 3 debris, all RED right now
+
+    set({ bombsLeft: s.bombsLeft - 1 });
+    const runAtFire = s.runId;
+    bombInFlightRun = runAtFire;
+    let destroyed = 0;
+    const done = new Set();
+
+    const applyVictim = (id) => {
+      if (done.has(id)) return;
+      done.add(id);
+      const st = get();
+      if (st.runId !== runAtFire || (st.gameState !== 'PLAYING' && st.gameState !== 'PAUSED')) return;
+      if (!st.debrisList.some((d) => d.id === id)) return; // already gone (e.g. a missile got it first)
+      destroyed++;
+      set({
+        debrisList: st.debrisList.filter((d) => d.id !== id),
+        selectedDebrisId: st.selectedDebrisId === id ? null : st.selectedDebrisId,
+        timeToCollision: ACTION_TIMEOUT_SECONDS, // every victim was RED, so the Collision Window resets
+        ...withCleared(st, [id]),
+      });
+      get().recalculateThreat();
+    };
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      victimIds.forEach(applyVictim); // anything a fragment didn't reach (fallback path)
+      if (bombInFlightRun === runAtFire) bombInFlightRun = null;
+      const st = get();
+      if (st.runId !== runAtFire) return;
+      st.pushNotice(`BOMB DETONATED - ${destroyed} RED DEBRIS ERADICATED`, 'success');
+      st.recalculateThreat();
+    };
+
+    emitBombShot({ targetId: target.id, victimIds, onVictim: applyVictim, onDone: finish });
+    setTimeout(finish, (BOMB_TOTAL_SECONDS + 1.5) * 1000); // fallback: no scene listening / hidden tab
   },
 
   // Passive threat accumulation: risk drifts upward over time on top of the

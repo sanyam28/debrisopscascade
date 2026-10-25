@@ -37,7 +37,7 @@ export default function ControlPanel() {
         </p>
         {/* Live score for this run: paid out when the level is cleared */}
         <p className="text-[10px] font-mono text-amber-300/80 mt-1">
-          {debrisCleared * pointsPerDebris(level)} pts
+          Cleared {debrisCleared} x {pointsPerDebris(level)} = {debrisCleared * pointsPerDebris(level)} pts
         </p>
       </div>
 
@@ -110,7 +110,7 @@ export default function ControlPanel() {
           >
             Bomb ({bombsLeft} Left)
             <span className="block text-[10px] font-normal opacity-80">
-              Clears {BOMB_TARGETS} nearest the satellite
+              Selected RED + up to {BOMB_TARGETS - 1} more nearby
             </span>
             <span className="block text-[10px] font-mono font-normal text-orange-100/80">[B]</span>
           </button>
