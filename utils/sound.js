@@ -6,9 +6,9 @@
 
 export const SOUNDS = {
   // name           file (in public/sounds/)   volume 0-1   loop
-  music:          { file: 'music.mp3',          volume: 0.35, loop: true },  // background track (title screen + mission)
+  music:          { file: 'music.mp3',          volume: 1.0,  loop: true },  // background track (title screen + mission)
   click:          { file: 'click.mp3',          volume: 0.5 },               // any button
-  denied:         { file: 'denied.mp3',         volume: 0.6 },               // "no missiles left", "behind Earth", reloading ...
+  denied:         { file: 'denied.mp3',         volume: 0.3 },               // "no missiles left", "behind Earth", reloading ...
   select:         { file: 'select.mp3',         volume: 0.6 },               // debris selected
   start:          { file: 'start.mp3',          volume: 0.8 },               // Start Mission
   laser:          { file: 'laser.mp3',          volume: 0.7 },               // every laser shot
@@ -27,9 +27,18 @@ export const SOUNDS = {
 };
 
 const BASE = '/sounds/';
+
+// A plain <audio> tag cannot go louder than 100%. MUSIC_BOOST routes the music through the Web Audio API
+// so it can be amplified past that (1 = no boost, 2 = twice as loud). A compressor keeps it from distorting.
+// The Music slider still goes from silent to this full boosted level. Set to 1 to turn the boost off.
+const MUSIC_BOOST = 2.2;
 const STORAGE_KEY = 'debris-ops-cascade:sound';
 
-const bases = {};          // name -> <audio> used as the template (and as the player for looping tracks)
+// Kept on globalThis so a hot-reload of this file (next dev) re-uses the SAME <audio> elements instead of
+// leaving an old, uncontrollable music track playing next to a new one.
+const G = typeof globalThis !== 'undefined' ? globalThis : {};
+const bases = (G.__debrisOpsAudio ||= {}); // name -> <audio> used as the template (and as the player for looping tracks)
+let musicWanted = false;                   // the game wants music playing right now (title screen / mission)
 const missing = new Set(); // names whose file failed to load
 // Music and sound effects have their own volume + mute, so one can be turned down without touching the other.
 const DEFAULT_SETTINGS = { music: { volume: 0.8, muted: false }, sfx: { volume: 0.8, muted: false } };
@@ -82,7 +91,27 @@ const effective = (name) => {
 
 function applyMusicVolume() {
   const m = bases.music;
-  if (m) m.volume = effective('music');
+  if (!m) return;
+  const v = effective('music');
+  m.volume = v;
+  m.muted = v === 0;                                   // belt and braces: volume 0 must really be silent
+  if (v === 0) m.pause();                              // nothing to hear, so don't even run the track
+  else if (musicWanted && m.paused) m.play().catch(() => {}); // slider raised again: carry on
+}
+
+function boostMusic(m) {
+  if (MUSIC_BOOST <= 1 || G.__debrisOpsBoost || typeof window.AudioContext === 'undefined') return;
+  try {
+    const ctx = new window.AudioContext();
+    const src = ctx.createMediaElementSource(m); // can only ever be done once per element
+    const gain = ctx.createGain();
+    gain.gain.value = MUSIC_BOOST;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.ratio.value = 12;
+    src.connect(gain).connect(limiter).connect(ctx.destination);
+    G.__debrisOpsBoost = ctx;
+  } catch { /* no Web Audio: music just plays at normal (non-boosted) level */ }
 }
 
 /** Start loading every file now (call once, after the first click). */
@@ -103,13 +132,16 @@ export function playSound(name) {
 
 /** Looping background music. */
 export function playMusic() {
+  musicWanted = true;
   const m = base('music');
   if (!m) return;
-  m.volume = effective('music');
-  m.play().catch(() => {});
+  boostMusic(m);
+  G.__debrisOpsBoost?.resume?.().catch?.(() => {});
+  applyMusicVolume(); // sets the volume and starts the track (unless volume is 0)
 }
-export function pauseMusic() { bases.music?.pause(); }
+export function pauseMusic() { musicWanted = false; bases.music?.pause(); }
 export function stopMusic() {
+  musicWanted = false;
   const m = bases.music;
   if (m) { m.pause(); m.currentTime = 0; }
 }
